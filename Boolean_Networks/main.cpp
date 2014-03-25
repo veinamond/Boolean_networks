@@ -287,6 +287,34 @@ vector<double> Compute(vector<double> in1, vector<double> in2, BN_operation op, 
 	}
 	return r;
 }
+void DoubleSort(vector<coords> & inds, vector<double> vals, int first, int last){
+	int i=first;
+	int j=last;
+	int x=vals[(first+last)/2];
+
+	do {
+		while (vals[i]<x) i++;
+		while (vals[j]>x) j--;
+
+		if (i<=j){
+			if (i<j) {
+				double tmp=vals[j];
+				vals[j]=vals[i];
+				vals[i]=tmp;
+				coords tmpi=inds[j];
+				inds[j]=inds[i];
+				inds[i]=tmpi;				
+			}
+			i++;
+			j--;
+		}
+	} while (i<=j);
+
+	if (i<last) {DoubleSort (inds,vals,i,last);}
+	if (first<j){DoubleSort (inds,vals,first,j);}
+}
+
+
 BN_Variable::BN_Variable(int freevar, BN_Variable& left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype){
 	BN_iotype=iotype;
 	leftparent=&left_par;
@@ -297,7 +325,8 @@ BN_Variable::BN_Variable(int freevar, BN_Variable& left_par, BN_Variable& right_
 	vector<double> t;
 	vector<coords> indexes;
 	t = Compute(leftparent->vars_values, rightparent->vars_values, op, indexes);	
-	
+	DoubleSort(indexes,t,0,indexes.size()-1); //sorted this ..
+
 
 }
 class Boolean_network{
