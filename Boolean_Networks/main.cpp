@@ -173,8 +173,13 @@ string Logical_equation::Print(){
 	}
 	return s;
 }
+struct coords{
+	int i;
+	int j;
+};
 class BN_Variable{
 private:
+	vector<Logical_equation> Equations;
 	vector<int> encoding_vars;
 	vector<double> vars_values;
 	double leftborder;
@@ -184,29 +189,29 @@ private:
 	BN_Variable * rightparent;
 	BN_operation parent_operation;
 	BN_variable_iotype BN_iotype;
+	vector<vector<coords>> Remove_redundant(vector<double> & in,  vector<coords> &c);
+	vector<vector<coords>> Weaken(vector<double> & in,  vector<coords> &c, int number_of_entries);
+	vector<double> Compute(vector<double> in1, vector<double> in2, BN_operation op, vector<coords> &c);
+	void DoubleSort(vector<coords> & inds, vector<double> &vals, int first, int last);
 public:
-	BN_Variable (int freevar, double left, double right, double step, BN_variable_iotype iotype);
-	BN_Variable (int freevar, BN_Variable &left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype);
+	BN_Variable (int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype);
+	BN_Variable (int &freevar, BN_Variable &left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype,  int number_of_entries);
 	string Print();
 };
-BN_Variable::BN_Variable(int freevar, double left, double right, double step, BN_variable_iotype iotype){
+BN_Variable::BN_Variable(int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype){
 	BN_iotype=iotype;
 	leftparent=NULL;
 	rightparent=NULL;
 	leftborder=left;
 	rightborder=right;
-	lattice_step=step;
-	int l=ceil((right-left)/step);
-	for (int i=0;i<l;i++){
-		encoding_vars.push_back(freevar+i+1);
-		vars_values.push_back(left+step*i);		
+	lattice_step=(right-left)/number_of_entries;	
+	for (int i=0;i<number_of_entries+1;i++){
+		encoding_vars.push_back(++freevar);
+		vars_values.push_back(left+lattice_step*i);		
 	}
 }
-struct coords{
-	int i;
-	int j;
-};
-vector<double> Compute(vector<double> in1, vector<double> in2, BN_operation op, vector<coords> &c){
+
+vector<double> BN_Variable::Compute(vector<double> in1, vector<double> in2, BN_operation op, vector<coords> &c){
 	vector<double> r;
 	switch (op){
 	case BN_operation::Degree:
@@ -287,7 +292,7 @@ vector<double> Compute(vector<double> in1, vector<double> in2, BN_operation op, 
 	}
 	return r;
 }
-void DoubleSort(vector<coords> & inds, vector<double> vals, int first, int last){
+void BN_Variable::DoubleSort(vector<coords> & inds, vector<double> &vals, int first, int last){
 	int i=first;
 	int j=last;
 	int x=vals[(first+last)/2];
@@ -313,32 +318,95 @@ void DoubleSort(vector<coords> & inds, vector<double> vals, int first, int last)
 	if (i<last) {DoubleSort (inds,vals,i,last);}
 	if (first<j){DoubleSort (inds,vals,first,j);}
 }
+vector<vector<coords>> BN_Variable::Remove_redundant(vector<double> & in,  vector<coords> &c){
+	vector<double> src;
+	vector<vector<coords>> res;
+	int j=0;
+	for (int i=0;i<in.size();i++){
+		src.push_back(in[i]);
+		vector<coords> a;
+		a.push_back(c[i]);
+		int j=i+1;
+		if (j<in.size()){
+			while (in[i]==in[j]){
+				a.push_back(c[j]);
+				if (j<in.size()-1)j++;
+			}				
+		}
+		res.push_back(a);
+		i=j-1;
+	}	
+	in=src;
+	return res;
+}
+vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<coords> &c, int number_of_entries){
+	double lb=in[0];
+	double rb=in[in.size()-1];
+	leftborder=lb;
+	rightborder=rb;
+	lattice_step=(rb-lb)/number_of_entries;
+	vector<double> src;
+	vector<vector<coords>> res;
+	int j=0;
+	for (int i=0;i<=number_of_entries;i++){
+		src.push_back(lb+i*(rb-lb));
+		vector<coords> a;
+		while ((in[j]<=src[i]+(rb-lb)/2)&&(in[j]>src[i]-(rb-lb)/2)){
+			a.push_back(c[j]);
+			j++;
+		}
+		res.push_back(a);
+	}	
+	in=src;
+	return res;
+}
 
-
-BN_Variable::BN_Variable(int freevar, BN_Variable& left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype){
+BN_Variable::BN_Variable(int &freevar, BN_Variable& left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype, int number_of_entries){
 	BN_iotype=iotype;
 	leftparent=&left_par;
 	rightparent=&right_par;
-	double left;
-	double right;
-	double step;
+
 	vector<double> t;
 	vector<coords> indexes;
 	t = Compute(leftparent->vars_values, rightparent->vars_values, op, indexes);	
 	DoubleSort(indexes,t,0,indexes.size()-1); //sorted this ..
-
-
+	vector<vector<coords>> r=Remove_redundant(t,indexes);
+	for (int i=0;i<r.size();i++){
+		vector<coords> a=r[i];
+		vector<Logical_statement> rp;
+		for (int j=0;j<a.size();j++){
+			vector<Logical_statement> tempv;
+			Logical_statement temp1(leftparent->encoding_vars[a[j].i]);
+			Logical_statement temp2(rightparent->encoding_vars[a[j].j]);
+			tempv.push_back(temp1);
+			tempv.push_back(temp2);
+			Logical_statement temp3;
+			temp3.Create_LS(LS_operation::AND,tempv);
+			rp.push_back(temp3);
+		}
+		Logical_statement rple;
+		encoding_vars.push_back(++freevar);
+		rple.Create_LS(LS_operation::OR,rp);
+		Logical_equation nle(encoding_vars[i],LE_equation_type::Assign,rple);
+		cout<<endl<<nle.Print();
+		Equations.push_back(nle);
+	}
 }
 class Boolean_network{
 private:
 	vector<BN_Variable> BN_variable_list;
 	vector<Logical_equation> Equations_list;
-
 };
 
 
 int main (){
+	int nVars;
+	nVars=0;
+	BN_Variable a(nVars,0,10,10,BN_variable_iotype::Input);
+	BN_Variable b(nVars,40,60,20,BN_variable_iotype::Input);
+	BN_Variable c(nVars, a,b, BN_operation::Plus, BN_variable_iotype::Input, 10);
+
 	cout<<"Work in progress"<<endl;
-	int a;
-	cin>>a;
+	int typein;
+	cin>>typein;
 }
