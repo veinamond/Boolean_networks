@@ -177,11 +177,143 @@ struct coords{
 	int i;
 	int j;
 };
+void quicksort(vector<double> &vals, int first, int last){
+	int i=first;
+	int j=last;
+	int x=vals[(first+last)/2];
+
+	do {
+		while (vals[i]<x) i++;
+		while (vals[j]>x) j--;
+
+		if (i<=j){
+			if (i<j) {
+				double tmp=vals[j];
+				vals[j]=vals[i];
+				vals[i]=tmp;				
+			}
+			i++;
+			j--;
+		}
+	} while (i<=j);
+
+	if (i<last) {quicksort (vals,i,last);}
+	if (first<j){quicksort (vals,first,j);}
+}
+class BN_range{
+private:
+	double leftborder;
+	double rightborder;
+	double mean;
+	vector<double> approximated_values;
+	double deviation;
+public:
+	double dev(){return deviation;}
+	BN_range(double lb, double rb, vector<double> values);
+	BN_range(double lb, double rb, double singlevalue);
+	void addtorange(double val);
+	void removefromrange(double val);
+	double mostright(){return approximated_values[0];}
+	double mostleft(){return approximated_values[approximated_values.size()-1];}
+	double compute_deviation();
+	double compute_deviation(bool droplb, bool droprb, bool usenewval, double newval);
+};
+BN_range::BN_range(double lb, double rb, double singlevalue){
+	leftborder=lb;
+	rightborder=rb;
+	approximated_values.push_back(singlevalue);
+	if ((singlevalue<lb)||(singlevalue>=rb)){
+			cout<<endl<<"Incorrect range";
+	}
+	mean=singlevalue;
+	deviation=0;
+}
+BN_range::BN_range(double lb, double rb, vector<double> values){
+	leftborder=lb;
+	rightborder=rb;
+	approximated_values=values;
+	quicksort(approximated_values,0,approximated_values.size()-1);
+	for (int i=0;i<approximated_values.size();i++){
+		if ((approximated_values[i]<lb)||(approximated_values[i]>=rb)){
+			cout<<endl<<"Incorrect range";
+		}
+	}
+	mean=(lb+rb)/2;
+	compute_deviation();
+}
+double BN_range::compute_deviation(){
+	double r=0;
+	for (int i=0;i<approximated_values.size();i++){
+		r+=(approximated_values[i]-mean)*(approximated_values[i]-mean);
+	}
+	r=r/approximated_values.size();
+	deviation=sqrt(r);
+	return deviation;
+}
+double BN_range::compute_deviation(bool droplb, bool droprb, bool usenewval, double newval){
+	if ((droplb==false)&&(droprb==false)){ return deviation;}
+	else{
+		if ((usenewval==false)&&(approximated_values.size()==1))return deviation;
+		
+		double r=0;		
+		int i1= droplb ? 1 : 0;
+		int il= droprb ? approximated_values.size()-1 : approximated_values.size();		
+		int sz=approximated_values.size();
+		double nlb=approximated_values[i1];
+		double nrb=approximated_values[il];
+		if (usenewval==true){
+			nlb=(approximated_values[i1]<newval)?approximated_values[il]:newval;
+			nrb=(approximated_values[il]>newval)?approximated_values[il]:newval;			
+		}
+		double mn=(nrb-nlb)/2;
+		if (droplb==true) {sz--;}
+		if (droprb==true) {sz--;}
+		if (usenewval==true) {
+			sz++;	
+			r=(newval-mn)*(newval-mn);
+		}
+		for (int i=1;i<il;i++){
+			r+=(approximated_values[i]-mn)*(approximated_values[i]-mn);
+		}
+		r=r/sz;
+		r=sqrt(r);
+		return r;
+	}
+}
+void BN_range::addtorange(double val){
+	approximated_values.push_back(val);
+	//very uneffective but will work - todo later
+	quicksort(approximated_values,0,approximated_values.size()-1);
+	leftborder=approximated_values[0];
+	rightborder=approximated_values[approximated_values.size()-1];
+	mean=(leftborder+rightborder)/2;
+	compute_deviation();
+}
+void BN_range::removefromrange(double val){
+	if (val==leftborder){
+		approximated_values.erase(approximated_values.begin());
+	}
+	if (val==rightborder){
+		approximated_values.erase(approximated_values.end());
+	}
+	if ((val<leftborder)&&(val>rightborder)) cout<<endl<<"error while removing from range";
+		
+	//very uneffective but will work - todo later
+	quicksort(approximated_values,0,approximated_values.size()-1);
+	leftborder=approximated_values[0];
+	rightborder=approximated_values[approximated_values.size()-1];
+	mean=(leftborder+rightborder)/2;
+	compute_deviation();
+}
 class BN_Variable{
 private:
+	string caption;
 	vector<Logical_equation> Equations;
-	vector<int> encoding_vars;
+	vector<int> encoding_vars;	
 	vector<double> vars_values;
+
+	vector<BN_range> ranges;
+
 	double leftborder;
 	double rightborder;
 	double lattice_step;
@@ -190,27 +322,33 @@ private:
 	BN_operation parent_operation;
 	BN_variable_iotype BN_iotype;
 	vector<vector<coords>> Remove_redundant(vector<double> & in,  vector<coords> &c);
-	vector<vector<coords>> Weaken(vector<double> & in,  vector<coords> &c, int number_of_entries);
+	vector<vector<coords>> Weaken(vector<double> & in,  vector<vector<coords>> &c, int number_of_entries);
 	vector<double> Compute(vector<double> in1, vector<double> in2, BN_operation op, vector<coords> &c);
+	void Improve_ranges(int number_of_iterations);
 	void DoubleSort(vector<coords> & inds, vector<double> &vals, int first, int last);
 public:
-	BN_Variable (int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype);
-	BN_Variable (int &freevar, BN_Variable &left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype,  int number_of_entries);
+	BN_Variable (string varname, int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype);
+	BN_Variable (string varname, int &freevar, BN_Variable &left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype,  int number_of_entries);
 	string Print();
 };
-BN_Variable::BN_Variable(int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype){
+BN_Variable::BN_Variable(string varname, int &freevar, double left, double right, int number_of_entries, BN_variable_iotype iotype){
+	caption=varname;
 	BN_iotype=iotype;
 	leftparent=NULL;
 	rightparent=NULL;
 	leftborder=left;
 	rightborder=right;
 	lattice_step=(right-left)/number_of_entries;	
+	double hstep=lattice_step/2;
 	for (int i=0;i<number_of_entries+1;i++){
-		encoding_vars.push_back(++freevar);
-		vars_values.push_back(left+lattice_step*i);		
-	}
-}
+		BN_range a(left+lattice_step*i - hstep,left+lattice_step*i+hstep,left+lattice_step*i);
+		ranges.push_back(a);
 
+		encoding_vars.push_back(++freevar);
+		vars_values.push_back(left+lattice_step*i);				
+	}
+
+}
 vector<double> BN_Variable::Compute(vector<double> in1, vector<double> in2, BN_operation op, vector<coords> &c){
 	vector<double> r;
 	switch (op){
@@ -292,6 +430,37 @@ vector<double> BN_Variable::Compute(vector<double> in1, vector<double> in2, BN_o
 	}
 	return r;
 }
+
+void BN_Variable::Improve_ranges(int number_of_iterations){
+	for (int i=0;i<number_of_iterations;i++){
+		for (int j=0;j<ranges.size()-1;j++){	
+			//try 1, move mostright value to neighbour
+			double d1=ranges[j].compute_deviation(false,true, false,0);
+			double d2=ranges[j+1].compute_deviation(false,false,true,ranges[j].mostright());
+			
+			while ((d1<ranges[j].dev())&&(d2<ranges[j+1].dev())){
+					double tmp=ranges[j].mostright();
+					ranges[j].removefromrange(tmp);
+					ranges[j+1].addtorange(tmp);		
+					d1=ranges[j].compute_deviation(false,true, false,0);
+					d2=ranges[j+1].compute_deviation(false,false,true,ranges[j].mostright());				
+			}
+
+			//try 2, take mostleft value from neighbour
+			double d3=ranges[j].compute_deviation(false,false,true,ranges[j+1].mostleft());
+			double d4=ranges[j+1].compute_deviation(true,false,false,0);
+
+			while ((d3<ranges[j].dev())&&(d4<ranges[j+1].dev())){
+					double tmp=ranges[j+1].mostleft();
+					ranges[j].addtorange(tmp);		
+					ranges[j+1].removefromrange(tmp);
+					d3=ranges[j].compute_deviation(false,false,true,ranges[j+1].mostleft());
+					d4=ranges[j+1].compute_deviation(true,false,false,0);
+			}		
+		}
+	}
+}
+
 void BN_Variable::DoubleSort(vector<coords> & inds, vector<double> &vals, int first, int last){
 	int i=first;
 	int j=last;
@@ -337,9 +506,17 @@ vector<vector<coords>> BN_Variable::Remove_redundant(vector<double> & in,  vecto
 		i=j-1;
 	}	
 	in=src;
+
+	for (int i=0;i<in.size();i++){
+		double lhs=(i==0)?in[i]-(in[i+1]-in[i])/2:(in[i]-in[i-1])/2;
+		double rhs=(i==in.size()-1)?in[i]-(in[i]-in[i-1])/2:(in[i+1]-in[i])/2;
+		BN_range b(in[i]-lhs, in[i]+rhs, in[i]);
+		ranges.push_back(b);
+	}
 	return res;
 }
-vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<coords> &c, int number_of_entries){
+
+vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<vector<coords>> &c, int number_of_entries){
 	double lb=in[0];
 	double rb=in[in.size()-1];
 	leftborder=lb;
@@ -351,26 +528,41 @@ vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<coords> 
 	for (int i=0;i<=number_of_entries;i++){
 		src.push_back(lb+i*(rb-lb));
 		vector<coords> a;
-		while ((in[j]<=src[i]+(rb-lb)/2)&&(in[j]>src[i]-(rb-lb)/2)){
-			a.push_back(c[j]);
+		vector<coords> a_t;
+		vector<double> b;
+		while ((in[j]<src[i]+(rb-lb)/2)&&(in[j]>=src[i]-(rb-lb)/2)){
+			b.push_back(in[j]);
+			
+			vector<coords> a_t=c[j];
+			for (int g=0;g<a_t.size();g++){
+				a.push_back(a_t[g]);
+			}
 			j++;
 		}
+		BN_range tmp(src[i]-(rb-lb)/2,src[i]+(rb-lb)/2,b);
+		ranges.push_back(tmp);
 		res.push_back(a);
 	}	
 	in=src;
 	return res;
 }
 
-BN_Variable::BN_Variable(int &freevar, BN_Variable& left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype, int number_of_entries){
+BN_Variable::BN_Variable(string varname, int &freevar, BN_Variable& left_par, BN_Variable& right_par, BN_operation op, BN_variable_iotype iotype, int number_of_entries){
+	caption=varname;
 	BN_iotype=iotype;
 	leftparent=&left_par;
 	rightparent=&right_par;
 
 	vector<double> t;
 	vector<coords> indexes;
-	t = Compute(leftparent->vars_values, rightparent->vars_values, op, indexes);	
+	t = Compute(leftparent->vars_values, rightparent->vars_values, op, indexes);
 	DoubleSort(indexes,t,0,indexes.size()-1); //sorted this ..
+
 	vector<vector<coords>> r=Remove_redundant(t,indexes);
+	if (t.size()>number_of_entries){
+		r=Weaken(t,r,number_of_entries);
+	}
+
 	for (int i=0;i<r.size();i++){
 		vector<coords> a=r[i];
 		vector<Logical_statement> rp;
@@ -402,9 +594,9 @@ private:
 int main (){
 	int nVars;
 	nVars=0;
-	BN_Variable a(nVars,0,10,10,BN_variable_iotype::Input);
-	BN_Variable b(nVars,40,60,20,BN_variable_iotype::Input);
-	BN_Variable c(nVars, a,b, BN_operation::Plus, BN_variable_iotype::Input, 10);
+	BN_Variable a("a", nVars,0,10,10,BN_variable_iotype::Input);
+	BN_Variable b("b", nVars,40,60,20,BN_variable_iotype::Input);
+	BN_Variable c("c", nVars, a,b, BN_operation::Plus, BN_variable_iotype::Input, 10);
 
 	cout<<"Work in progress"<<endl;
 	int typein;
