@@ -257,7 +257,7 @@ double BN_range::compute_deviation(bool droplb, bool droprb, bool usenewval, dou
 		
 		double r=0;		
 		int i1= droplb ? 1 : 0;
-		int il= droprb ? approximated_values.size()-1 : approximated_values.size();		
+		int il= droprb ? approximated_values.size()-2 : approximated_values.size()-1;		
 		int sz=approximated_values.size();
 		double nlb=approximated_values[i1];
 		double nrb=approximated_values[il];
@@ -524,13 +524,14 @@ vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<vector<c
 	lattice_step=(rb-lb)/number_of_entries;
 	vector<double> src;
 	vector<vector<coords>> res;
+	ranges.clear();
 	int j=0;
 	for (int i=0;i<=number_of_entries;i++){
-		src.push_back(lb+i*(rb-lb));
+		src.push_back(lb+i*lattice_step);
 		vector<coords> a;
 		vector<coords> a_t;
 		vector<double> b;
-		while ((in[j]<src[i]+(rb-lb)/2)&&(in[j]>=src[i]-(rb-lb)/2)){
+		while ((in[j]<src[i]+lattice_step/2)&&(in[j]>=src[i]-lattice_step/2)){
 			b.push_back(in[j]);
 			
 			vector<coords> a_t=c[j];
@@ -538,8 +539,9 @@ vector<vector<coords>> BN_Variable::Weaken(vector<double> & in,  vector<vector<c
 				a.push_back(a_t[g]);
 			}
 			j++;
+			if (j==in.size()) break;
 		}
-		BN_range tmp(src[i]-(rb-lb)/2,src[i]+(rb-lb)/2,b);
+		BN_range tmp(src[i]-lattice_step/2,src[i]+lattice_step/2,b);
 		ranges.push_back(tmp);
 		res.push_back(a);
 	}	
@@ -561,6 +563,7 @@ BN_Variable::BN_Variable(string varname, int &freevar, BN_Variable& left_par, BN
 	vector<vector<coords>> r=Remove_redundant(t,indexes);
 	if (t.size()>number_of_entries){
 		r=Weaken(t,r,number_of_entries);
+		Improve_ranges(3);
 	}
 
 	for (int i=0;i<r.size();i++){
