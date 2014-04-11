@@ -65,7 +65,36 @@ int Arity_BN(BN_operation a){
 	}
 	return result;
 }
+string op_txt(BN_operation a){
+	string result;
+	switch (a){
+		case BN_operation::Plus:
+			result='+';
+			break;
+		case BN_operation::Minus:
+			result='-';
+			break;
+		case BN_operation::Times:
+			result='*';
+			break;
+		case BN_operation::Divide:
+			result='/';
+			break;
+		case BN_operation::Degree:
+			result='^';
+			break;
+		case BN_operation::Neg:
+			result='-';
+			break;
+		case BN_operation::Log:
+			result='log';
+			break;		
+	default:
+		result="";	
+	}
+	return result;
 
+}
 class Logical_statement{
 private:
 	LS_operation st_op;
@@ -593,10 +622,147 @@ private:
 	vector<Logical_equation> Equations_list;
 };
 
+class BN_token{
+private:
+	string token;	// token itself
+	int istart;		// position of token first symbol in string
+	int length;		// length of the token
+	int depth;		// depth in terms of braces, depth == 3 if there were 3 '(' braces before and 0 ')'
+public:
+	int start_ind (){return istart;}
+	int len_ind (){return length;}
+	BN_token(){
+		token="";
+		istart=0;
+		length=0;
+		depth=0;
+	}
+	BN_token(char t, int i_s, int d){
+		token=t;
+		istart=i_s;
+		length=1;
+		depth=d;
+	}
+	BN_token(string t, int i_s, int l, int d){
+		token=t;
+		istart=i_s;
+		length=l;
+		depth=d;
+	}
+};
+
+enum class BN_parsing_error{need_opening_brace, need_closing_brace, unknown_token_name};
+
+class op_node{
+	BN_operation op;
+	op_node * left;
+	op_node * right;
+	op_node *parent;
+	int arity;
+public:
+	op_node(BN_operation operation, op_node &par, op_node &l_child, op_node &r_child){
+		op=operation;
+		parent=&par;
+		left=&l_child;
+		right=&r_child;
+		arity=Arity_BN(op);
+	}	
+	string print (){
+		string res;
+		string tmp=op_txt(op);
+		bool isbetween=false;
+		if (tmp.length()==1) isbetween=true;
+
+		if (isbetween==false) res=tmp+"(";
+
+		if (left!=NULL){
+			res+=left->print();
+		}
+		else cout<<endl<<"Operation tree error, null left pointer";
+
+		if (arity==2){			
+			if (isbetween) res +=" "+ tmp+" ";
+			if (right!=NULL){
+				res+=right->print();
+			}
+			else cout<<endl<<"Operation tree error, null right pointer";
+		}	
+		if (isbetween==false) res+= ")";		
+		if (parent!=NULL) {res ="("+res+")";}
+		return res;
+	}
+	
+};
+
+class op_tree{
+private:
+	op_node root;
+	string text_ver;
+public:
+	
+
+};
+class BN_parser{	
+public:
+	void parse (string in);
+
+};
+void BN_parser::parse (string in){
+	//€вно выдел€ем односимвольные операции +-*/
+	//обрабатываем многосимвольные log(), sin() , pow() вы€вл€€ скобки, которые после них сто€т
+	
+	vector<BN_token> tokens;
+	int d=0;
+	for (int i=0;i<in.size();i++){
+		switch (in[i]){
+		case '+':
+		case '-':
+		case '*':
+		case '/':
+		case ',':
+		case '=':
+				{
+					BN_token a(in[i],i,d);
+					tokens.push_back(a);
+				 }
+			break;
+		case '(':{
+					string tmp;
+					int h=0;
+					if (tokens.size()>0){
+						h=tokens[tokens.size()-1].start_ind();
+					}
+					tmp=in.substr(h+1,i-h-1);
+					BN_token a_t(tmp,i,tmp.length(),d);
+					tokens.push_back(a_t);
+
+					d++;
+					BN_token a(in[i],i,d);
+					tokens.push_back(a);
+				 }
+			break;
+		case ')':{
+					d--;
+					BN_token a(in[i],i,d);
+					tokens.push_back(a);
+				 }
+			break;			
+		default:
+			break;
+		}
+	}
+
+
+}
 
 int main (){
 	int nVars;
 	nVars=0;
+	string test="a+b+c+log(d)+pos(x,y)";
+	BN_parser p;
+	p.parse(test);
+
+
 	BN_Variable a("a", nVars,0,10,10,BN_variable_iotype::Input);
 	BN_Variable b("b", nVars,40,60,20,BN_variable_iotype::Input);
 	BN_Variable c("c", nVars, a,b, BN_operation::Plus, BN_variable_iotype::Input, 10);
